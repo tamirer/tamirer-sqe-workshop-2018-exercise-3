@@ -183,7 +183,6 @@ function sortEdges() {
     let s = getAllNodesWithNoIn();
     while(s.length > 0){
         let n = s.pop();
-        edgesList = edgesList;
         l = l.concat(getOutEdgesOfNode(n));
         getNeighbours(n).forEach((m) => {
             removeEdge({from:n.name,to:m.name});
@@ -307,6 +306,7 @@ function handleVarDec(item,lastNode){
     let decStr = decToString(item);
     if(decStr === null) return lastNode;
     if(shouldOpenNewNode){
+        addEdge(lastNode,'d' + decCount);
         addNode('d' + decCount++,'operation',decStr);
         shouldOpenNewNode = false;
         return 'd' + (decCount-1);
@@ -345,7 +345,7 @@ function handleReturn(item){
         addEdge(node,dummyNode);
     });
     let returnNode = 'r';
-    addNode(returnNode,'end','return ' +  item.value);
+    addNode(returnNode,'operation','return ' +  item.value);
     addEdge(dummyNode,returnNode);
 }
 
@@ -361,7 +361,7 @@ function changeStart() {
     removeAllEdges('st');
     node = getNode(node);
     removeNode(node.name);
-    addNode(node.name,'start',node.value,node.options);
+    addNode(node.name,'operation',node.value,node.options);
 }
 
 function decToString(item) {

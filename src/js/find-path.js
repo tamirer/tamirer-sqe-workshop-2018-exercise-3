@@ -95,8 +95,16 @@ function removeIf(obj) {
 
 let _tagged_ = [];
 
-//!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!CONTINUE HERE!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-//needs to loop through all of the ifs and concat the results
+function removeGlobals(code) {
+    let res = undefined;
+    code.body.forEach((item)=>{
+        if(item.type === 'FunctionDeclaration' && res === undefined){
+            res = escodegen.generate(item);
+        }
+    });
+    return res === undefined ? '' : res;
+}
+
 function calcLines(code, input) {
     let tagged = getElem(code);
     _tagged_ = tagged;
@@ -107,7 +115,8 @@ function calcLines(code, input) {
         let res = replaceReturn(codeCopy, []);
         if(res === undefined) continue;
         //tagged = removeIf(tagged,res.if);
-        let toEval = '(' + escodegen.generate(codeCopy) + ') (' + input.join(', ') + ' )';
+        let toEval = removeGlobals(codeCopy);
+        toEval = '(' + toEval + ') (' + input.join(', ') + ' )';
         res = eval(toEval);
         if(res[0])
             result = result.concat(res[1]);
