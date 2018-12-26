@@ -97,12 +97,17 @@ let _tagged_ = [];
 
 function removeGlobals(code) {
     let res = undefined;
+    let decs = [];
     code.body.forEach((item)=>{
         if(item.type === 'FunctionDeclaration' && res === undefined){
-            res = escodegen.generate(item);
+            res = JSON.parse(JSON.stringify(item));
         }
+        else if(res === undefined)
+            decs.push(JSON.parse(JSON.stringify(item)));
     });
-    return res === undefined ? '' : res;
+    if(res === undefined) return '';
+    res.body.body = decs.concat(res.body.body);
+    return escodegen.generate(res);
 }
 
 function calcLines(code, input) {

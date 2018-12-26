@@ -71,11 +71,16 @@ let getElem = _getElem;
 
 let decCount = 0;
 let ifCount = 0;
+let whileCount = 0;
 let shouldOpenNewNode = true;
 let start = 'st';
 
 let edgesList = [];
 let nodesList = [];
+let allNodes = [];
+let ifNodeTag = [];
+let greenLines = undefined;
+let tagged = undefined;
 
 function removeNode(name) {
     let len = nodesList.length;
@@ -111,7 +116,7 @@ function removeAllEdges(name) {
 
 function getNode(name) {
     let res = undefined;
-    nodesList.forEach((node)=>{
+    allNodes.forEach((node)=>{
         if(res !== undefined) return;
         if(node.name === name)
             res = node;
@@ -178,19 +183,38 @@ return error   (graph has at least one cycle)
 else
 return L   (a topologically sorted order)*/
 
-function sortEdges() {
+function topologicalSort() {
     let l = [];
     let s = getAllNodesWithNoIn();
-    while(s.length > 0){
+    while (s.length > 0) {
         let n = s.pop();
         l = l.concat(getOutEdgesOfNode(n));
         getNeighbours(n).forEach((m) => {
-            removeEdge({from:n.name,to:m.name});
-            if(!hasIn(m))
+            removeEdge({from: n.name, to: m.name});
+            if (!hasIn(m))
                 s.push(m);
         });
     }
     return l;
+}
+
+function bestEffortSort() {
+    let s = getAllNodesWithNoIn();
+    let passed = [];
+    let res = [];
+    while(s.length>0){
+        let n = s.pop();
+        if(passed.indexOf(n) > -1) continue;
+        passed.push(n);
+        let neighbours = getNeighbours(n);
+        s = s.concat(neighbours);
+        res = res.concat(getOutEdgesOfNode(n));
+    }
+    return res;
+}
+
+function sortEdges() {
+    return bestEffortSort();
 }
 
 function getEdges(){
@@ -209,6 +233,7 @@ function getEdges(){
 
 function addNode(name,type,label,options) {
     nodesList.push({name:name,type:type,value:label,options:options});
+    allNodes.push({name:name,type:type,value:label,options:options});
 }
 
 function addEdge(Node1,Node2,dir) {
@@ -224,7 +249,7 @@ function draw(){
     let options =
         {
             'flowstate' : {
-                'pass' : {'fill' : 'green'},
+                'green' : {'fill' : 'green'},
             }
         };
     diagram.drawSVG('diagram',options);
@@ -232,16 +257,18 @@ function draw(){
 
 export function getGraph(parsedCode,input = [1,2,3]) {
     console.log(parsedCode);
-    let greenLines = main(parsedCode, input).greenLines;
-    let tagged = getElem(parsedCode);
+    greenLines = main(parsedCode, input).greenLines;
+    tagged = getElem(parsedCode);
     console.log(tagged);
     edgesList = [];
     nodesList = [];
     decCount = 0;
     ifCount = 0;
+    whileCount = 0;
     createGraph(tagged);
     changeStart();
-    //colorGraph(greenLines);
+    fixWhile();
+    colorGraph();
     draw();
 }
 
@@ -260,23 +287,37 @@ function handleItem(item,lastNode) {
     else if (item.type === 'IfStatement')
         return handleIf(item,lastNode);
     else if(item.type === 'ReturnStatement')
-        return handleReturn(item);
+        return handleReturn(item,lastNode);
     else
         return handleItemHelper(item,lastNode);
 }
 
-function createGraph(tagged){
+function createGraph(_tagged){
     let lastNode = 'st';
     shouldOpenNewNode = true;
-    tagged.forEach((item)=>{
+    _tagged.forEach((item)=>{
         lastNode = handleItem(item,lastNode);
     });
     return lastNode;
 }
 
+function handleWhile(item,lastNode){
+    if(item.ignore)return lastNode;
+    let newNode = 'w' + whileCount++;
+    let cond = item.condition;
+    addNode(newNode,'condition',cond);
+    addEdge(lastNode,newNode);
+    let body =  createGraph(getElem(item.pointer.body));
+    addEdge(newNode,body,'yes,left');
+    addEdge(body,newNode);
+    shouldOpenNewNode = true;
+    return newNode;
+}
+
 function handleIf(item,lastNode){
     if(item.ignore) return lastNode;
     let newNode = 'f' + ifCount++;
+    ifNodeTag.push({node:newNode,tag:item});
     let cond = item.condition;
     addNode(newNode,'condition',cond,'pass');
     addEdge(lastNode,newNode);
@@ -337,9 +378,11 @@ function getFinalNodes() {
     return nodes;
 }
 
-function handleReturn(item){
+function handleReturn(item,lastNode){
     let nodes = getFinalNodes();
     let dummyNode = 'rd'; //return dummy
+    if(getNode(lastNode).type !== 'condition')
+        addEdge(lastNode,dummyNode);
     addNode(dummyNode,'end','call return');
     nodes.forEach((node) => {
         addEdge(node,dummyNode);
@@ -364,10 +407,169 @@ function changeStart() {
     addNode(node.name,'operation',node.value,node.options);
 }
 
+function fixWhile() {
+    let res = [];
+    edgesList.forEach((edge)=>{
+        if(edge.from.split('')[0] === 'w' && edge.dir === undefined)
+            res.push({from:edge.from,to:edge.to,dir:'no,right'});
+        else
+            res.push(edge);
+    });
+    edgesList = res;
+}
+
 function decToString(item) {
     if(item.value === null || item.ignore)
         return null;
     return item.name + ' = ' + item.value;
+}
+
+function colorGraph() {
+    let res = [];
+    let len = nodesList.length;
+    while(res.length < len)
+    {
+        let node = nodesList.pop();
+        if(nodeInList(node.name,res)) continue;
+        let color = shouldColor(node,res);
+        if(color === true)
+            res.push({name:node.name,type:node.type,value:node.value,options:'green'});
+        else if(color === false)
+            res.push({name:node.name,type:node.type,value:node.value,options:'red'});
+        nodesList.unshift(node);
+    }
+    nodesList = res;
+}
+
+/*
+* if the node has no in than true
+* if all of the ins are unchecked than return undefined
+* if one of the ins are green and unconditioned return true
+* if all of the ins are red return false
+* if some are red and some are unchecked return undefined
+* if one of the ins are green and conditioned check if the condition was met
+* */
+
+function shouldColor(node,checked) {
+    if(!hasIn(node))
+        return true;
+    let ins = getCheckedIns(node,checked);
+    if(ins.length === 0) return undefined;
+    if(allRed(ins,node)) return false;
+    let greenIns = getGreenIns(ins);
+    let res = undefined;
+    greenIns.forEach((inNode)=>{
+        if(res === true) return;
+        if(!isConditioned(inNode))
+            res = true;
+        else
+            res = isCondMet(inNode,node);
+    });
+    return checkRes(res,ins,node);
+}
+
+function checkRes(res,ins,node) {
+    if(res) return true;
+    if(ins.length === getInNodes(node).length) return false;
+    return undefined;
+}
+
+
+//inNode is a condition which is green
+//if its true and goes to node with yes than true
+//if its false and goes to node with no than true
+//else return false
+/*
+* nodeValue = true <=> cond is green
+*
+*
+* */
+
+function getCondValue(inNode) {
+    let name = inNode.name;
+    let tag = null;
+    ifNodeTag.forEach((pair)=>{
+        if(pair.node === name)
+            tag = pair.tag;
+    });
+    let res = false;
+    greenLines.forEach((line)=>{
+        if(tag.line === line)
+            res = true;
+    });
+    return res;
+}
+
+function getConnectionToNode(inNode,node) {
+    let res = undefined;
+    edgesList.forEach((edge)=>{
+        if(edge.from === inNode.name && edge.to === node.name)
+            res = edge.dir.split(',')[0].trim();
+    });
+    return res;
+}
+
+function isCondMet(inNode,node) {
+    let condValue = getCondValue(inNode);
+    let connection = getConnectionToNode(inNode,node);
+    if(condValue === true && (connection.localeCompare('yes') === 0))
+        return true;
+    if(condValue === false && (connection.localeCompare('no') === 0))
+        return true;
+    return false;
+}
+
+function isConditioned(inNode) {
+    return inNode.type === 'condition';
+}
+
+function getGreenIns(checked) {
+    let res = [];
+    checked.forEach((node)=>{
+        if(node.options === 'green')
+            res.push(node);
+    });
+    return res;
+}
+
+function allRed(nodes,node) {
+    let res = true;
+    if(nodes.length !== getInNodes(node).length) return false;
+    nodes.forEach((node)=>{
+        if(node.options === undefined || node.options === 'green')
+            res = false;
+    });
+    return res;
+}
+
+function getCheckedIns(node,checked) {
+    let ins = getInNodes(node);
+    let res = [];
+    checked.forEach((check)=>{
+        if(nodeInList(check.name,ins))
+            res.push(check);
+    });
+    return res;
+}
+
+function getInNodes(node) {
+    let res = [];
+    edgesList.forEach((e)=>{
+        if(e.to === node.name)
+            if(!nodeInList(e.from,res))
+                res.push(getNode(e.from));
+    });
+    return res;
+}
+
+function nodeInList(name,list) {
+    let res = false;
+    if(list.length === 0) return res;
+    list.forEach((node)=>{
+        if(node.name === name)
+            res = true;
+    });
+    return res;
 }
 
 export {parseCode};

@@ -1,6 +1,7 @@
 import escodegen from 'escodegen';
 
 let isInIf = false;
+let isInWhile = false;
 
 function concatElem(result,item) {
     if(item.type === 'VariableDeclaration') {
@@ -61,7 +62,7 @@ function getForExp(item){
     let test = escodegen.generate(item.test);
     let update = escodegen.generate(item.update);
     let condition = init + '; ' + test + '; ' + update;
-    res.push({line:line,type:type,name:name,condition:condition,value:value,pointer:item,ignore:isInIf});
+    res.push({line:line,type:type,name:name,condition:condition,value:value,pointer:item,ignore:isInIf|isInWhile});
     res = res.concat(_getElem(item.body));
     return res;
 }
@@ -72,7 +73,7 @@ function getRetExp(item) {
     let line = item.loc.start.line;
     let name = null;
     let condition = null;
-    return {line:line,type:type,name:name,condition:condition,value:value,pointer:item,ignore:isInIf};
+    return {line:line,type:type,name:name,condition:condition,value:value,pointer:item,ignore:isInIf|isInWhile};
 }
 
 function getIfExp(item){
@@ -82,7 +83,7 @@ function getIfExp(item){
     let value = null;
     let name = null;
     let type = item.type;
-    result.push({line:line,type:type,name:name,condition:condition,value:value,pointer:item,ignore:isInIf});
+    result.push({line:line,type:type,name:name,condition:condition,value:value,pointer:item,ignore:isInIf|isInWhile});
     isInIf = true;
     result = result.concat(_getElem({body:[item.consequent]}));
     let temp = item.alternate === null ? [] : _getElem({body:[item.alternate]});
@@ -98,9 +99,11 @@ function getWhileExp(item) {
     let value = null;
     let line = item.loc.start.line;
     let type = item.type;
-    let whileExp = {line:line,type:type,name:name,condition:condition,value:value,pointer:item,ignore:isInIf};
+    let whileExp = {line:line,type:type,name:name,condition:condition,value:value,pointer:item,ignore:isInIf|isInWhile};
     result.push(whileExp);
+    isInWhile = true;
     result = result.concat(_getElem(item.body));
+    isInWhile = false;
     return result;
 }
 
@@ -111,7 +114,7 @@ function getAssExp(item) {
     let value = escodegen.generate(exp.right);
     let condition = null;
     let line = item.loc.start.line;
-    return {line:line,type:type,name:name,condition:condition,value:value,pointer:item,ignore:isInIf};
+    return {line:line,type:type,name:name,condition:condition,value:value,pointer:item,ignore:isInIf|isInWhile};
 }
 
 function getFunDec(item) {
@@ -121,7 +124,7 @@ function getFunDec(item) {
     let condition = null,value = null;
     let id = item.id, params = item.params;
     let name = id.name;
-    result.push({line:line,type:type,name:name,condition:condition,value:value,pointer:item,ignore:isInIf});
+    result.push({line:line,type:type,name:name,condition:condition,value:value,pointer:item,ignore:isInIf|isInWhile});
     params.forEach((param) => {
         type = 'VariableDeclaration';
         name = param.name;
@@ -146,7 +149,7 @@ function getVarDec(item) {
         let value = init === null ? null : escodegen.generate(init);
         let name = id.name;
         let line = id.loc.start.line;
-        result.push({line:line,type:type,name:name,condition:condition,value:value,pointer:item,ignore:isInIf});
+        result.push({line:line,type:type,name:name,condition:condition,value:value,pointer:item,ignore:isInIf|isInWhile});
     });
     return result;
 }
