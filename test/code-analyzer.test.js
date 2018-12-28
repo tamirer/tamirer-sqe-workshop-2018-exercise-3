@@ -17,7 +17,7 @@ describe('The javascript parser', () => {
     });
 
     //dummy
-    it('is parsing a simple variable declaration correctly', () => {
+    it('graph of a if-else clauses', () => {
         let actual = getGraph(parseCode('function foo(x, y, z){\n' +
             '    let a = x + 1;\n' +
             '    let b = a + y;\n' +
@@ -42,7 +42,7 @@ describe('The javascript parser', () => {
         );
     });
 
-    it('is parsing a simple variable declaration correctly', () => {
+    it('graph of while clause', () => {
         let actual = getGraph(parseCode('function foo(x){\n' +
             'let y = x;\n' +
             'while(x < 5){\n' +
@@ -60,7 +60,7 @@ describe('The javascript parser', () => {
         );
     });
 
-    it('is parsing a simple variable declaration correctly', () => {
+    it('graph of if without else', () => {
         let actual = getGraph(parseCode('function foo(x, y, z){\n' +
             '    let a = x + 1;\n' +
             '    let b = a + y;\n' +
@@ -80,7 +80,7 @@ describe('The javascript parser', () => {
         );
     });
 
-    it('is parsing a simple variable declaration correctly', () => {
+    it('graph of while without anything before it', () => {
         let actual = getGraph(parseCode('function foo(x){\n' +
             'while(x < 5){\n' +
             'x = x +1;\n' +
@@ -96,7 +96,7 @@ describe('The javascript parser', () => {
         );
     });
 
-    it('is parsing a simple variable declaration correctly', () => {
+    it('graph of function without if/while', () => {
         let actual = getGraph(parseCode('function foo(x){\n' +
             'x = x +1;\n' +
             'return x;\n' +
@@ -110,7 +110,7 @@ describe('The javascript parser', () => {
         );
     });
 
-    it('is parsing a simple variable declaration correctly', () => {
+    it('graph of code with globals without ifs', () => {
         let actual = getGraph(parseCode('let y = 1;\n' +
             '\n' +
             'function foo(x){\n' +
@@ -126,7 +126,7 @@ describe('The javascript parser', () => {
         );
     });
 
-    it('is parsing a simple variable declaration correctly', () => {
+    it('graph of global with ifs', () => {
         let actual = getGraph(parseCode('let w = 1;\n' +
             '\n' +
             'function foo(x, y, z){\n' +
@@ -148,7 +148,7 @@ describe('The javascript parser', () => {
         );
     });
 
-    it('is parsing a simple variable declaration correctly', () => {
+    it('graph with unassigned value to local var', () => {
         let actual = getGraph(parseCode('function foo(x, y, z){\n' +
             '    let a = x + 1;\n' +
             '    let b = a + y;\n' +
