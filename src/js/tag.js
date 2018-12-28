@@ -20,9 +20,6 @@ function concatLoop(result,item) {
     if(item.type === 'WhileStatement'){
         result = result.concat(getWhileExp(item));
     }
-    else if(item.type === 'ForStatement'){
-        result = result.concat(getForExp(item));
-    }
     return result;
 }
 
@@ -47,24 +44,8 @@ export function _getElem(parsedCode) {
     return result;
 }
 
-
 function getBlockExp(item){
     return _getElem(item);
-}
-
-function getForExp(item){
-    let res = [];
-    let type = item.type;
-    let line = item.loc.start.line;
-    let value = null;
-    let name = null;
-    let init = escodegen.generate(item.init);
-    let test = escodegen.generate(item.test);
-    let update = escodegen.generate(item.update);
-    let condition = init + '; ' + test + '; ' + update;
-    res.push({line:line,type:type,name:name,condition:condition,value:value,pointer:item,ignore:isInIf|isInWhile});
-    res = res.concat(_getElem(item.body));
-    return res;
 }
 
 function getRetExp(item) {

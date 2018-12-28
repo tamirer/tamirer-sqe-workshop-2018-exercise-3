@@ -42,15 +42,25 @@ export function main(_code,input) {
 function addReturn(obj,val) {
     let objCopy = JSON.parse(JSON.stringify(obj));
     let argument = JSON.stringify(esprima.parse(JSON.stringify(eval('{val: [true,' + val + ']}'))).body[0]);
-    obj.consequent.body.push(
-        JSON.parse(
-            '{"type":"ReturnStatement","argument":' + argument + ',"loc":null}'
-        ));
-    removeIf(objCopy);
+
+    if(obj.type === 'IfStatement') {
+        obj.consequent.body.push(
+            JSON.parse(
+                '{"type":"ReturnStatement","argument":' + argument + ',"loc":null}'
+            ));
+        removeItem(objCopy);
+    }
+    else{
+        obj.body.body.unshift(
+            JSON.parse(
+                '{"type":"ReturnStatement","argument":' + argument + ',"loc":null}'
+            ));
+        removeItem(objCopy);
+    }
 }
 
 function needsToCheck(obj) {
-    if(obj['type'] !== 'IfStatement') return false;
+    if(obj['type'] !== 'IfStatement' && obj['type'] !== 'WhileStatement') return false;
     let tagged = _tagged_;
     let res = false;
     tagged.forEach((item)=>{
@@ -61,11 +71,15 @@ function needsToCheck(obj) {
 }
 
 function makeNewVal(obj,val){
-    return obj.type === 'IfStatement'?val.concat([obj.loc.start.line]):val;
+    return obj.type === 'IfStatement' || obj.type === 'WhileStatement' ?val.concat([obj.loc.start.line]):val;
+}
+
+function getVal(obj, key, newVal, val) {
+    return key === 'consequent' ? newVal : val;
 }
 
 function replaceReturn(obj,val) {
-    if(obj === null || obj === undefined) return;
+    if(obj === null) return;
     let res = undefined;
     if(Array.isArray(obj))
         obj.forEach((item) => {
@@ -79,12 +93,12 @@ function replaceReturn(obj,val) {
         if(needsToCheck(obj))
             res = {dummy:addReturn(obj,newVal),if:obj};
         else
-            res = replaceReturn(obj[key],key === 'consequent' ? newVal : val);
+            res = replaceReturn(obj[key],getVal(obj, key, newVal, val));
     });
     return res;
 }
 
-function removeIf(obj) {
+function removeItem(obj) {
     let res = [];
     _tagged_.forEach((item)=>{
         if(JSON.stringify(item.pointer) !== JSON.stringify(obj))
@@ -102,10 +116,9 @@ function removeGlobals(code) {
         if(item.type === 'FunctionDeclaration' && res === undefined){
             res = JSON.parse(JSON.stringify(item));
         }
-        else if(res === undefined)
+        else
             decs.push(JSON.parse(JSON.stringify(item)));
     });
-    if(res === undefined) return '';
     res.body.body = decs.concat(res.body.body);
     return escodegen.generate(res);
 }
@@ -118,8 +131,6 @@ function calcLines(code, input) {
     for(let i =0; i< limit; i++) {
         let codeCopy = JSON.parse(JSON.stringify(code));
         let res = replaceReturn(codeCopy, []);
-        if(res === undefined) continue;
-        //tagged = removeIf(tagged,res.if);
         let toEval = removeGlobals(codeCopy);
         toEval = '(' + toEval + ') (' + input.join(', ') + ' )';
         res = eval(toEval);
@@ -151,7 +162,7 @@ function getElem(parsedCode){
     let tagged = _getElem(parsedCode);
     let res = [];
     tagged.forEach((item)=>{
-        if(item.type === 'IfStatement')
+        if(item.type === 'IfStatement' || item.type === 'WhileStatement')
             res.push(item);
     });
     return res;

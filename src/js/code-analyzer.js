@@ -1,8 +1,6 @@
 import * as esprima from 'esprima';
-import fc from 'flowchart.js';
 import {main} from './find-path.js';
 import {_getElem} from './tag';
-import $ from 'jquery';
 
 const parseCode = (codeToParse) => {
     return esprima.parseScript(codeToParse,{loc:true});
@@ -78,7 +76,7 @@ let start = 'st';
 let edgesList = [];
 let nodesList = [];
 let allNodes = [];
-let ifNodeTag = [];
+let nodeToTag = [];
 let greenLines = undefined;
 let tagged = undefined;
 
@@ -87,16 +85,6 @@ function removeNode(name) {
     for(let i = 0; i < len; i++){
         if(nodesList[i].name === name){
             nodesList.splice(i,1);
-            return;
-        }
-    }
-}
-
-function removeEdge(edge) {
-    let len = edgesList.length;
-    for(let i = 0; i < len; i++){
-        if(edgesList[i].from === edge.from && edgesList[i].to === edge.to){
-            edgesList.splice(i,1);
             return;
         }
     }
@@ -124,109 +112,28 @@ function getNode(name) {
     return res;
 }
 
-function getNodes() {
-    let res = '';
-    nodesList.reverse().forEach((node)=>{
-        res += '\n' + node.name +'=>' + node.type +': ' + node.value;
-        if(node.options !== undefined)
-            res += '|'+ node.options;
+function checkWhileIns(node) {
+    if(!node.name.startsWith('w')) return true;
+    let body;
+    edgesList.forEach((edge)=>{
+        if(edge.from === node.name && edge.dir !== undefined && edge.dir.startsWith('yes'))
+            body = edge.to;
     });
-    return res;
-}
-
-function hasIn(node) {
     let res = false;
-    edgesList.forEach((edge) => {
-        if(edge.to === node.name)
+    edgesList.forEach((edge)=>{
+        if(edge.to === node.name && edge.from !== body)
             res = true;
     });
     return res;
 }
 
-function getOutEdgesOfNode(node) {
-    let res = [];
-    edgesList.forEach((edge)=>{
-        if(edge.from === node.name)
-            res.push(edge);
-    });
-    return res;
-}
-
-function getAllNodesWithNoIn() {
-    let res = [];
-    nodesList.forEach((node)=>{
-        if(!hasIn(node))
-            res.push(node);
-    });
-    return res;
-}
-
-function getNeighbours(node) {
-    let res = [];
+function hasIn(node) {
+    let res = checkWhileIns(node);
+    if(!res) return res;
+    else res = false;
     edgesList.forEach((edge) => {
-        if(edge.from === node.name)
-            res.push(getNode(edge.to));
-    });
-    return res;
-}
-/* L ← Empty list that will contain the sorted elements
-S ← Set of all nodes with no incoming edge
-while S is non-empty do
-    remove a node n from S
-    add n to tail of L
-    for each node m with an edge e from n to m do
-        remove edge e from the graph
-           if m has no other incoming edges then
-                insert m into S
-if graph has edges then
-return error   (graph has at least one cycle)
-else
-return L   (a topologically sorted order)*/
-
-function topologicalSort() {
-    let l = [];
-    let s = getAllNodesWithNoIn();
-    while (s.length > 0) {
-        let n = s.pop();
-        l = l.concat(getOutEdgesOfNode(n));
-        getNeighbours(n).forEach((m) => {
-            removeEdge({from: n.name, to: m.name});
-            if (!hasIn(m))
-                s.push(m);
-        });
-    }
-    return l;
-}
-
-function bestEffortSort() {
-    let s = getAllNodesWithNoIn();
-    let passed = [];
-    let res = [];
-    while(s.length>0){
-        let n = s.pop();
-        if(passed.indexOf(n) > -1) continue;
-        passed.push(n);
-        let neighbours = getNeighbours(n);
-        s = s.concat(neighbours);
-        res = res.concat(getOutEdgesOfNode(n));
-    }
-    return res;
-}
-
-function sortEdges() {
-    return bestEffortSort();
-}
-
-function getEdges(){
-    let res = '';
-    edgesList = sortEdges();
-    edgesList.forEach((edge)=>{
-        res += '\n';
-        if(edge.dir === undefined)
-            res += edge.from + '->' + edge.to;
-        else
-            res += edge.from + '(' + edge.dir + ')->' + edge.to;
-        res += '\n';
+        if(edge.to === node.name)
+            res = true;
     });
     return res;
 }
@@ -241,27 +148,12 @@ function addEdge(Node1,Node2,dir) {
 
 }
 
-function draw(){
-    $('#diagram').empty();
-    let nodes = getNodes();
-    let edges = getEdges();
-    let diagram = fc.parse( nodes + '\n' + edges);
-    let options =
-        {
-            'flowstate' : {
-                'green' : {'fill' : 'green'},
-            }
-        };
-    diagram.drawSVG('diagram',options);
-}
-
 export function getGraph(parsedCode,input = [1,2,3]) {
-    console.log(parsedCode);
     greenLines = main(parsedCode, input).greenLines;
     tagged = getElem(parsedCode);
-    console.log(tagged);
     edgesList = [];
     nodesList = [];
+    allNodes = [];
     decCount = 0;
     ifCount = 0;
     whileCount = 0;
@@ -269,7 +161,7 @@ export function getGraph(parsedCode,input = [1,2,3]) {
     changeStart();
     fixWhile();
     colorGraph();
-    draw();
+    return {nodes:nodesList,edges:edgesList,allNodes:allNodes};
 }
 
 function handleItemHelper(item,lastNode) {
@@ -277,8 +169,7 @@ function handleItemHelper(item,lastNode) {
         return handleWhile(item,lastNode);
     else if (item.type === 'VariableDeclaration')
         return handleVarDec(item,lastNode);
-    else if (item.type === 'AssignmentExpression')
-        return handleAssign(item,lastNode);
+    return handleAssign(item,lastNode);
 }
 
 function handleItem(item,lastNode) {
@@ -296,16 +187,17 @@ function createGraph(_tagged){
     let lastNode = 'st';
     shouldOpenNewNode = true;
     _tagged.forEach((item)=>{
+        if(item.ignore) return;
         lastNode = handleItem(item,lastNode);
     });
     return lastNode;
 }
 
 function handleWhile(item,lastNode){
-    if(item.ignore)return lastNode;
     let newNode = 'w' + whileCount++;
     let cond = item.condition;
     addNode(newNode,'condition',cond);
+    nodeToTag.push({node:newNode,tag:item});
     addEdge(lastNode,newNode);
     let body =  createGraph(getElem(item.pointer.body));
     addEdge(newNode,body,'yes,left');
@@ -315,37 +207,34 @@ function handleWhile(item,lastNode){
 }
 
 function handleIf(item,lastNode){
-    if(item.ignore) return lastNode;
     let newNode = 'f' + ifCount++;
-    ifNodeTag.push({node:newNode,tag:item});
+    nodeToTag.push({node:newNode,tag:item});
     let cond = item.condition;
     addNode(newNode,'condition',cond,'pass');
     addEdge(lastNode,newNode);
     let ditNode = createGraph(getElem({body:[item.pointer.consequent]}));
-    let difNode = createGraph(getElem({body:[item.pointer.alternate]}));
+    if(item.pointer.alternate !== null) {
+        let difNode = createGraph(getElem({body: [item.pointer.alternate]}));
+        addEdge(newNode, difNode, 'no, right');
+    }
     addEdge(newNode,ditNode,'yes, left');
-    addEdge(newNode,difNode,'no, right');
     addEdge(start,lastNode);
     shouldOpenNewNode = true;
     return newNode;
 }
 
 function handleFunc(item,lastNode){
-    if(item.ignore) return lastNode;
     addEdge(start,lastNode);
     shouldOpenNewNode = true;
     return lastNode;
 }
 
 function handleAssign(item,lastNode){
-    if(item.ignore) return lastNode;
     return handleVarDec(item,lastNode);
 }
 
 function handleVarDec(item,lastNode){
-    if(item.ignore) return lastNode;
     let decStr = decToString(item);
-    if(decStr === null) return lastNode;
     if(shouldOpenNewNode){
         addEdge(lastNode,'d' + decCount);
         addNode('d' + decCount++,'operation',decStr);
@@ -354,8 +243,7 @@ function handleVarDec(item,lastNode){
     }
     else{
         let temp = getNode(lastNode);
-        if(temp !== undefined)
-            temp.value += '\n' + decStr;
+        temp.value += '\n' + decStr;
     }
     return lastNode;
 }
@@ -378,11 +266,25 @@ function getFinalNodes() {
     return nodes;
 }
 
+function isConditionComplete(lastNode) {
+    let yes = undefined,no = undefined;
+    edgesList.forEach((edge)=>{
+        if(edge.from === lastNode && edge.dir !== undefined ) {
+            if (edge.dir.startsWith('yes'))
+                yes = true;
+            else
+                no = true;
+        }
+    });
+    return yes && no;
+}
+
 function handleReturn(item,lastNode){
     let nodes = getFinalNodes();
     let dummyNode = 'rd'; //return dummy
-    if(getNode(lastNode).type !== 'condition')
-        addEdge(lastNode,dummyNode);
+    //TODO
+    if(!isConditionComplete(lastNode))
+        addEdge(lastNode,dummyNode,'no,right');
     addNode(dummyNode,'end','call return');
     nodes.forEach((node) => {
         addEdge(node,dummyNode);
@@ -412,15 +314,20 @@ function fixWhile() {
     edgesList.forEach((edge)=>{
         if(edge.from.split('')[0] === 'w' && edge.dir === undefined)
             res.push({from:edge.from,to:edge.to,dir:'no,right'});
-        else
-            res.push(edge);
+        else res.push(edge);
+    });
+    nodesList.forEach((node)=>{
+        if(node.name.startsWith('w') && !hasIn(node)) {
+            addNode('n' +node.name.split('')[1], 'operation', 'null');
+            res.push({from:'n' +node.name.split('')[1], to:node.name});
+        }
     });
     edgesList = res;
 }
 
 function decToString(item) {
-    if(item.value === null || item.ignore)
-        return null;
+    if(item.value === null)
+        return item.name;
     return item.name + ' = ' + item.value;
 }
 
@@ -455,11 +362,11 @@ function shouldColor(node,checked) {
         return true;
     let ins = getCheckedIns(node,checked);
     if(ins.length === 0) return undefined;
-    if(allRed(ins,node)) return false;
+    //if(allRed(ins,node)) return false;
     let greenIns = getGreenIns(ins);
     let res = undefined;
     greenIns.forEach((inNode)=>{
-        if(res === true) return;
+        //if(res === true) return;
         if(!isConditioned(inNode))
             res = true;
         else
@@ -488,7 +395,7 @@ function checkRes(res,ins,node) {
 function getCondValue(inNode) {
     let name = inNode.name;
     let tag = null;
-    ifNodeTag.forEach((pair)=>{
+    nodeToTag.forEach((pair)=>{
         if(pair.node === name)
             tag = pair.tag;
     });
@@ -512,11 +419,11 @@ function getConnectionToNode(inNode,node) {
 function isCondMet(inNode,node) {
     let condValue = getCondValue(inNode);
     let connection = getConnectionToNode(inNode,node);
+    if(inNode.name.startsWith('w')) return true;
     if(condValue === true && (connection.localeCompare('yes') === 0))
         return true;
-    if(condValue === false && (connection.localeCompare('no') === 0))
-        return true;
-    return false;
+    return condValue === false && (connection.localeCompare('no') === 0);
+
 }
 
 function isConditioned(inNode) {
@@ -532,7 +439,7 @@ function getGreenIns(checked) {
     return res;
 }
 
-function allRed(nodes,node) {
+/*function allRed(nodes,node) {
     let res = true;
     if(nodes.length !== getInNodes(node).length) return false;
     nodes.forEach((node)=>{
@@ -540,7 +447,7 @@ function allRed(nodes,node) {
             res = false;
     });
     return res;
-}
+}*/
 
 function getCheckedIns(node,checked) {
     let ins = getInNodes(node);
