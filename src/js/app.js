@@ -12,7 +12,8 @@ $(document).ready(function () {
         nodeNum = 1;
         let codeToParse = $('#codePlaceholder').val();
         let parsedCode = parseCode(codeToParse);
-        let input = eval('[' + $('#diagram').val() + ']');
+        let input = $('#input').val();
+        input = eval('[' + input + ']');
         let graph = getGraph(parsedCode,input);
         nodesList = graph.nodes;
         edgesList = graph.edges;

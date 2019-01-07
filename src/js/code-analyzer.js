@@ -144,11 +144,14 @@ function addNode(name,type,label,options) {
 }
 
 function addEdge(Node1,Node2,dir) {
+    if(Node2 === Node1) return;
     edgesList.push({from:Node1,to:Node2,dir:dir});
 
 }
 
 export function getGraph(parsedCode,input = [1,2,3]) {
+    if(input.length < 1)
+        input = [1,2,3];
     greenLines = main(parsedCode, input).greenLines;
     tagged = getElem(parsedCode);
     edgesList = [];
@@ -282,7 +285,6 @@ function isConditionComplete(lastNode) {
 function handleReturn(item,lastNode){
     let nodes = getFinalNodes();
     let dummyNode = 'rd'; //return dummy
-    //TODO
     if(!isConditionComplete(lastNode))
         addEdge(lastNode,dummyNode,'no,right');
     addNode(dummyNode,'end','call return');
